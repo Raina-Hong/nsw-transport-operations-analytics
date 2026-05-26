@@ -107,6 +107,58 @@ SELECT
         GROUP BY f.year, f.month, f.month_name
         ORDER BY f.year, f.month;
 
+-- weather_demand_relationship
+WITH monthly_weather AS (
+            SELECT
+                STRFTIME(date, '%Y-%m') AS month_id,
+                AVG(rainfall_mm) AS avg_rainfall_mm,
+                SUM(rainfall_mm) AS total_rainfall_mm,
+                SUM(CASE WHEN is_rainy THEN 1 ELSE 0 END) AS rainy_days,
+                AVG(max_temp) AS avg_max_temp,
+                AVG(min_temp) AS avg_min_temp
+            FROM dim_weather
+            GROUP BY STRFTIME(date, '%Y-%m')
+        ),
+
+        monthly_demand AS (
+            SELECT
+                STRFTIME(year_month, '%Y-%m') AS month_id,
+                year,
+                month,
+                month_name,
+                transport_mode,
+                SUM(trip_count) AS total_trips
+            FROM fact_monthly_opal_trips
+            GROUP BY
+                STRFTIME(year_month, '%Y-%m'),
+                year,
+                month,
+                month_name,
+                transport_mode
+        )
+
+        SELECT
+            d.month_id,
+            d.year,
+            d.month,
+            d.month_name,
+            d.transport_mode,
+            d.total_trips,
+            w.avg_rainfall_mm,
+            w.total_rainfall_mm,
+            w.rainy_days,
+            w.avg_max_temp,
+            w.avg_min_temp,
+            CASE
+                WHEN w.rainy_days >= 15 THEN 'High Rainfall Month'
+                WHEN w.rainy_days >= 8 THEN 'Moderate Rainfall Month'
+                ELSE 'Low Rainfall Month'
+            END AS rainfall_month_category
+        FROM monthly_demand d
+        LEFT JOIN monthly_weather w
+            ON d.month_id = w.month_id
+        ORDER BY d.year, d.month, d.transport_mode;
+
 -- data_quality_summary
 SELECT
             'fact_monthly_opal_trips' AS dataset,
