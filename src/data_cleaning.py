@@ -1,13 +1,9 @@
 """
 Data cleaning functions for the NSW Transport Operations Analytics project.
 
-This module cleans:
-1. NSW Opal monthly trip data
-2. NSW train station entry/exit flow data
-3. Sydney Airport BOM weather data
-4. NSW public holiday data
-
-The functions are designed to be reused by notebooks or scripts.
+This module cleans Opal trip records, station flow data, weather observations,
+and public holiday information before the data is transformed into fact and
+dimension tables.
 """
 
 from pathlib import Path
@@ -16,9 +12,7 @@ import numpy as np
 
 
 def standardise_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Standardise column names into lower_snake_case.
-    """
+    """Standardise column names into lower_snake_case."""
     df = df.copy()
     df.columns = (
         df.columns
@@ -33,24 +27,16 @@ def clean_opal_trips(opal_raw: pd.DataFrame) -> pd.DataFrame:
     """
     Clean NSW Opal monthly trips data.
 
-    Expected raw columns include:
-    - Year_Month
-    - Card Type
-    - Travel Mode
-    - Trip
-
-    Returns a clean monthly demand table with:
-    - year_month
-    - year
-    - month
-    - month_name
-    - card_type
-    - transport_mode
-    - trip_count
+    The function standardises column names, parses the month field, converts
+    trip counts into numeric values, and keeps records from 2020 to 2025.
     """
     opal = standardise_columns(opal_raw)
 
-    opal["year_month"] = pd.to_datetime(opal["year_month"], format="%b-%Y", errors="coerce")
+    opal["year_month"] = pd.to_datetime(
+        opal["year_month"],
+        format="%b-%Y",
+        errors="coerce"
+    )
 
     opal["year"] = opal["year_month"].dt.year
     opal["month"] = opal["year_month"].dt.month
@@ -92,16 +78,9 @@ def clean_station_flow(station_flow_raw: pd.DataFrame) -> pd.DataFrame:
     """
     Clean NSW train station entries and exits data.
 
-    The source file has long time-window column names, so this function
-    renames them into cleaner operational fields and creates station-level
-    pressure indicators.
-
-    Returns:
-    - yearly station entries/exits
-    - total flow
-    - peak flow
-    - entry-exit imbalance
-    - bottleneck score
+    The function standardises time-window columns, converts passenger counts
+    into numeric values, and creates station pressure indicators such as total
+    flow, peak flow, entry-exit imbalance and bottleneck score.
     """
     station_flow = station_flow_raw.copy()
 
@@ -142,50 +121,25 @@ def clean_station_flow(station_flow_raw: pd.DataFrame) -> pd.DataFrame:
         )
         station_flow[col] = pd.to_numeric(station_flow[col], errors="coerce").fillna(0)
 
-    station_flow["station_name"] = (
-        station_flow["station_name"]
-        .astype(str)
-        .str.strip()
-    )
+    station_flow["station_name"] = station_flow["station_name"].astype(str).str.strip()
 
     station_flow = station_flow[
         (station_flow["year"] >= 2020) &
         (station_flow["year"] <= 2025)
     ].copy()
 
-    station_flow["total_flow"] = (
-        station_flow["total_entries"] +
-        station_flow["total_exits"]
-    )
-
-    station_flow["morning_total_flow"] = (
-        station_flow["morning_entries"] +
-        station_flow["morning_exits"]
-    )
-
-    station_flow["midday_total_flow"] = (
-        station_flow["midday_entries"] +
-        station_flow["midday_exits"]
-    )
-
-    station_flow["evening_total_flow"] = (
-        station_flow["evening_entries"] +
-        station_flow["evening_exits"]
-    )
-
-    station_flow["night_total_flow"] = (
-        station_flow["night_entries"] +
-        station_flow["night_exits"]
-    )
+    station_flow["total_flow"] = station_flow["total_entries"] + station_flow["total_exits"]
+    station_flow["morning_total_flow"] = station_flow["morning_entries"] + station_flow["morning_exits"]
+    station_flow["midday_total_flow"] = station_flow["midday_entries"] + station_flow["midday_exits"]
+    station_flow["evening_total_flow"] = station_flow["evening_entries"] + station_flow["evening_exits"]
+    station_flow["night_total_flow"] = station_flow["night_entries"] + station_flow["night_exits"]
 
     station_flow["entry_exit_imbalance"] = (
-        station_flow["total_entries"] -
-        station_flow["total_exits"]
+        station_flow["total_entries"] - station_flow["total_exits"]
     )
 
     station_flow["peak_total_flow"] = (
-        station_flow["morning_total_flow"] +
-        station_flow["evening_total_flow"]
+        station_flow["morning_total_flow"] + station_flow["evening_total_flow"]
     )
 
     station_flow["bottleneck_score"] = np.where(
@@ -232,15 +186,23 @@ def clean_station_flow(station_flow_raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def create_date_from_bom(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create a date column from BOM Year, Month and Day columns.
-    """
+    """Create a date column from BOM Year, Month and Day columns."""
     df = df.copy()
-    df["date"] = pd.to_datetime(
-        df[["Year", "Month", "Day"]],
-        errors="coerce"
-    )
+    df["date"] = pd.to_datetime(df[["Year", "Month", "Day"]], errors="coerce")
     return df
+
+
+def classify_weather(row: pd.Series) -> str:
+    """Classify daily weather into a simple operational category."""
+    if row["rainfall_mm"] >= 10:
+        return "Heavy Rain"
+    if row["rainfall_mm"] > 0:
+        return "Rainy"
+    if pd.notna(row["max_temp"]) and row["max_temp"] >= 30:
+        return "Hot"
+    if pd.notna(row["max_temp"]) and row["max_temp"] <= 15:
+        return "Cool"
+    return "Clear / Mild"
 
 
 def clean_weather_data(
@@ -249,15 +211,8 @@ def clean_weather_data(
     min_temp_raw: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    Clean and merge daily weather data from BOM.
-
-    Inputs:
-    - daily rainfall
-    - daily maximum temperature
-    - daily minimum temperature
-
-    Returns a daily weather dimension with rainfall, temperature,
-    rainy-day flag and simple weather category.
+    Clean and merge daily weather data from BOM rainfall, maximum temperature
+    and minimum temperature files.
     """
     rainfall = create_date_from_bom(rainfall_raw)
     rainfall = rainfall.rename(columns={
@@ -298,7 +253,6 @@ def clean_weather_data(
 
     weather["rainfall_mm"] = weather["rainfall_mm"].fillna(0)
     weather["is_rainy"] = weather["rainfall_mm"] > 0
-
     weather["weather_category"] = weather.apply(classify_weather, axis=1)
 
     weather = weather[
@@ -318,54 +272,68 @@ def clean_weather_data(
     return weather
 
 
-def classify_weather(row: pd.Series) -> str:
-    """
-    Classify daily weather into a simple operational category.
-    """
-    if row["rainfall_mm"] >= 10:
-        return "Heavy Rain"
-    elif row["rainfall_mm"] > 0:
-        return "Rainy"
-    elif pd.notna(row["max_temp"]) and row["max_temp"] >= 30:
-        return "Hot"
-    elif pd.notna(row["max_temp"]) and row["max_temp"] <= 15:
-        return "Cool"
-    else:
-        return "Clear / Mild"
+def create_manual_nsw_holidays_2024_2025() -> pd.DataFrame:
+    """Create manual NSW public holiday records for 2024 and 2025."""
+    manual_holidays = pd.DataFrame({
+        "date": [
+            "2024-01-01", "2024-01-26", "2024-03-29", "2024-03-30",
+            "2024-03-31", "2024-04-01", "2024-04-25", "2024-06-10",
+            "2024-10-07", "2024-12-25", "2024-12-26",
+            "2025-01-01", "2025-01-27", "2025-04-18", "2025-04-19",
+            "2025-04-20", "2025-04-21", "2025-04-25", "2025-06-09",
+            "2025-10-06", "2025-12-25", "2025-12-26"
+        ],
+        "holiday_name": [
+            "New Year's Day", "Australia Day", "Good Friday", "Easter Saturday",
+            "Easter Sunday", "Easter Monday", "Anzac Day", "King's Birthday",
+            "Labour Day", "Christmas Day", "Boxing Day",
+            "New Year's Day", "Australia Day", "Good Friday", "Easter Saturday",
+            "Easter Sunday", "Easter Monday", "Anzac Day", "King's Birthday",
+            "Labour Day", "Christmas Day", "Boxing Day"
+        ]
+    })
+
+    manual_holidays["date"] = pd.to_datetime(manual_holidays["date"])
+    manual_holidays["is_holiday"] = True
+
+    return manual_holidays
 
 
 def clean_public_holidays(holidays_raw: pd.DataFrame) -> pd.DataFrame:
     """
-    Clean NSW public holiday data.
+    Clean NSW public holiday data and add manual records for 2024 and 2025.
 
-    The notebook uses the public holiday table to enrich the date dimension.
-    This function standardises the date field and keeps the holiday name.
+    The downloaded source file may use columns such as day/significance or
+    date/holiday_name. This function handles both patterns.
     """
-    holidays = holidays_raw.copy()
-    holidays.columns = (
-        holidays.columns
-        .str.strip()
-        .str.lower()
-        .str.replace(" ", "_", regex=False)
-    )
+    holidays = standardise_columns(holidays_raw)
 
-    date_col_candidates = ["date", "holiday_date"]
-    name_col_candidates = ["holiday_name", "name", "holiday"]
+    rename_map = {}
+    if "day" in holidays.columns:
+        rename_map["day"] = "date"
+    if "significance" in holidays.columns:
+        rename_map["significance"] = "holiday_name"
+    if "name" in holidays.columns:
+        rename_map["name"] = "holiday_name"
+    if "holiday" in holidays.columns:
+        rename_map["holiday"] = "holiday_name"
 
-    date_col = next((col for col in date_col_candidates if col in holidays.columns), None)
-    name_col = next((col for col in name_col_candidates if col in holidays.columns), None)
+    holidays = holidays.rename(columns=rename_map)
 
-    if date_col is None:
+    if "date" not in holidays.columns:
         raise ValueError("No valid date column found in public holidays data.")
 
-    holidays["date"] = pd.to_datetime(holidays[date_col], errors="coerce")
+    holidays["date"] = pd.to_datetime(
+        holidays["date"],
+        dayfirst=True,
+        errors="coerce"
+    )
 
-    if name_col is None:
+    if "holiday_name" not in holidays.columns:
         holidays["holiday_name"] = "Public Holiday"
-    else:
-        holidays["holiday_name"] = holidays[name_col].astype(str).str.strip()
 
-    holidays = holidays.dropna(subset=["date"]).copy()
+    holidays = holidays[["date", "holiday_name"]].dropna(subset=["date"])
+    holidays["holiday_name"] = holidays["holiday_name"].astype(str).str.strip()
     holidays["is_holiday"] = True
 
     holidays = holidays[
@@ -373,9 +341,13 @@ def clean_public_holidays(holidays_raw: pd.DataFrame) -> pd.DataFrame:
         (holidays["date"] <= "2025-12-31")
     ].copy()
 
-    holidays = holidays[["date", "holiday_name", "is_holiday"]].drop_duplicates()
+    manual_holidays = create_manual_nsw_holidays_2024_2025()
 
-    return holidays
+    holidays = pd.concat([holidays, manual_holidays], ignore_index=True)
+    holidays = holidays.drop_duplicates(subset=["date", "holiday_name"])
+    holidays = holidays.sort_values("date").reset_index(drop=True)
+
+    return holidays[["date", "holiday_name", "is_holiday"]]
 
 
 def export_cleaned_datasets(
@@ -384,9 +356,7 @@ def export_cleaned_datasets(
     weather: pd.DataFrame,
     output_dir: str | Path
 ) -> None:
-    """
-    Export cleaned datasets to data/processed.
-    """
+    """Export cleaned datasets to data/processed."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 

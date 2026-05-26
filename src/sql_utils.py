@@ -2,12 +2,8 @@
 DuckDB utilities and SQL analysis queries for the NSW Transport Operations
 Analytics project.
 
-This module:
-1. Connects to a DuckDB database
-2. Loads final CSV tables
-3. Creates SQL tables
-4. Runs reusable SQL analyses
-5. Exports SQL results to CSV
+This module connects to DuckDB, loads final CSV tables, creates SQL tables,
+runs reusable SQL analyses and exports results to CSV.
 """
 
 from pathlib import Path
@@ -26,20 +22,14 @@ FINAL_TABLES = {
 
 
 def connect_duckdb(db_path: str | Path) -> duckdb.DuckDBPyConnection:
-    """
-    Connect to a DuckDB database.
-    """
+    """Connect to a DuckDB database."""
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    con = duckdb.connect(database=str(db_path), read_only=False)
-    return con
+    return duckdb.connect(database=str(db_path), read_only=False)
 
 
 def load_final_tables(final_dir: str | Path) -> dict[str, pd.DataFrame]:
-    """
-    Load final fact and dimension CSV tables from data/final.
-    """
+    """Load final fact and dimension CSV tables from data/final."""
     final_dir = Path(final_dir)
     tables = {}
 
@@ -66,9 +56,7 @@ def create_duckdb_tables(
     con: duckdb.DuckDBPyConnection,
     tables: dict[str, pd.DataFrame]
 ) -> None:
-    """
-    Register pandas DataFrames and create DuckDB physical tables.
-    """
+    """Register pandas DataFrames and create DuckDB physical tables."""
     for table_name, df in tables.items():
         con.register(f"{table_name}_df", df)
 
@@ -106,9 +94,7 @@ def get_table_row_counts(
     con: duckdb.DuckDBPyConnection,
     table_names: list[str] | None = None
 ) -> pd.DataFrame:
-    """
-    Return row counts for core DuckDB tables.
-    """
+    """Return row counts for core DuckDB tables."""
     if table_names is None:
         table_names = list(FINAL_TABLES.keys())
 
@@ -196,7 +182,7 @@ SQL_QUERIES = {
         FROM fact_station_flow
         GROUP BY station_name
         HAVING SUM(total_flow) > 0
-        ORDER BY peak_flow_share DESC
+        ORDER BY peak_flow_share DESC, total_peak_flow DESC
         LIMIT 20;
     """,
 
@@ -232,6 +218,7 @@ SQL_QUERIES = {
             f.year,
             f.month,
             f.month_name,
+            CAST(f.year AS VARCHAR) || '-' || LPAD(CAST(f.month AS VARCHAR), 2, '0') AS month_id,
             SUM(f.trip_count) AS total_trips,
             AVG(w.rainfall_mm) AS avg_rainfall_mm,
             SUM(w.rainfall_mm) AS total_rainfall_mm,
@@ -249,6 +236,7 @@ SQL_QUERIES = {
         SELECT
             'fact_monthly_opal_trips' AS dataset,
             COUNT(*) AS row_count,
+            COUNT(*) - COUNT(DISTINCT month_id || card_type || transport_mode) AS duplicate_count,
             SUM(CASE WHEN trip_count IS NULL THEN 1 ELSE 0 END) AS missing_key_metric_count
         FROM fact_monthly_opal_trips
 
@@ -257,14 +245,43 @@ SQL_QUERIES = {
         SELECT
             'fact_station_flow' AS dataset,
             COUNT(*) AS row_count,
+            COUNT(*) - COUNT(DISTINCT station_flow_id) AS duplicate_count,
             SUM(CASE WHEN total_flow IS NULL THEN 1 ELSE 0 END) AS missing_key_metric_count
         FROM fact_station_flow
 
         UNION ALL
 
         SELECT
+            'dim_date' AS dataset,
+            COUNT(*) AS row_count,
+            COUNT(*) - COUNT(DISTINCT date) AS duplicate_count,
+            SUM(CASE WHEN date IS NULL THEN 1 ELSE 0 END) AS missing_key_metric_count
+        FROM dim_date
+
+        UNION ALL
+
+        SELECT
+            'dim_station' AS dataset,
+            COUNT(*) AS row_count,
+            COUNT(*) - COUNT(DISTINCT station_id_gtfs) AS duplicate_count,
+            SUM(CASE WHEN station_id_gtfs IS NULL THEN 1 ELSE 0 END) AS missing_key_metric_count
+        FROM dim_station
+
+        UNION ALL
+
+        SELECT
+            'dim_route' AS dataset,
+            COUNT(*) AS row_count,
+            COUNT(*) - COUNT(DISTINCT route_id) AS duplicate_count,
+            SUM(CASE WHEN route_id IS NULL THEN 1 ELSE 0 END) AS missing_key_metric_count
+        FROM dim_route
+
+        UNION ALL
+
+        SELECT
             'dim_weather' AS dataset,
             COUNT(*) AS row_count,
+            COUNT(*) - COUNT(DISTINCT date) AS duplicate_count,
             SUM(CASE WHEN rainfall_mm IS NULL OR max_temp IS NULL OR min_temp IS NULL THEN 1 ELSE 0 END) AS missing_key_metric_count
         FROM dim_weather;
     """,
@@ -327,9 +344,7 @@ def run_sql_query(
     con: duckdb.DuckDBPyConnection,
     query: str
 ) -> pd.DataFrame:
-    """
-    Run a SQL query and return a DataFrame.
-    """
+    """Run a SQL query and return a DataFrame."""
     return con.execute(query).fetchdf()
 
 
@@ -337,9 +352,7 @@ def run_named_query(
     con: duckdb.DuckDBPyConnection,
     query_name: str
 ) -> pd.DataFrame:
-    """
-    Run one of the predefined project SQL queries.
-    """
+    """Run one of the predefined project SQL queries."""
     if query_name not in SQL_QUERIES:
         raise ValueError(
             f"Unknown query name: {query_name}. "
@@ -354,9 +367,7 @@ def export_sql_results(
     output_dir: str | Path,
     query_names: list[str] | None = None
 ) -> dict[str, pd.DataFrame]:
-    """
-    Run selected SQL analyses and export each result to CSV.
-    """
+    """Run selected SQL analyses and export each result to CSV."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -378,15 +389,11 @@ def setup_database_from_final_tables(
     db_path: str | Path
 ) -> duckdb.DuckDBPyConnection:
     """
-    Full setup function:
-    1. Connect to DuckDB
-    2. Load final CSV tables
-    3. Create DuckDB tables
+    Connect to DuckDB, load final CSV tables and create analytical tables.
     """
     con = connect_duckdb(db_path)
     tables = load_final_tables(final_dir)
     create_duckdb_tables(con, tables)
-
     return con
 
 
@@ -394,9 +401,7 @@ def write_sql_file(
     output_path: str | Path,
     queries: dict[str, str] | None = None
 ) -> None:
-    """
-    Export all project SQL queries into a .sql file for GitHub review.
-    """
+    """Export all project SQL queries into a .sql file for GitHub review."""
     if queries is None:
         queries = SQL_QUERIES
 

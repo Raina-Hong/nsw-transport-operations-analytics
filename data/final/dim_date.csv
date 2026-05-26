@@ -1852,7 +1852,7 @@ date,year,quarter,month,month_name,day,weekday,weekday_name,is_weekend,is_holida
 2025-01-24,2025,1,1,January,24,4,Friday,False,False,Non-Holiday,Summer,2025-01
 2025-01-25,2025,1,1,January,25,5,Saturday,True,False,Non-Holiday,Summer,2025-01
 2025-01-26,2025,1,1,January,26,6,Sunday,True,False,Non-Holiday,Summer,2025-01
-2025-01-27,2025,1,1,January,27,0,Monday,False,True,Australia Day Holiday,Summer,2025-01
+2025-01-27,2025,1,1,January,27,0,Monday,False,True,Australia Day,Summer,2025-01
 2025-01-28,2025,1,1,January,28,1,Tuesday,False,False,Non-Holiday,Summer,2025-01
 2025-01-29,2025,1,1,January,29,2,Wednesday,False,False,Non-Holiday,Summer,2025-01
 2025-01-30,2025,1,1,January,30,3,Thursday,False,False,Non-Holiday,Summer,2025-01

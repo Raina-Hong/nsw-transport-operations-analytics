@@ -1,12 +1,9 @@
 """
 Forecasting utilities for the NSW Transport Operations Analytics project.
 
-This module builds a monthly transport demand forecasting workflow using:
-1. Lagged demand features
-2. Rolling average features
-3. Monthly weather features
-4. Calendar and seasonal features
-5. Baseline, Linear Regression and Random Forest models
+This module builds a monthly transport demand forecasting workflow using
+lagged demand, rolling averages, weather features, calendar features and
+transport mode indicators.
 """
 
 from pathlib import Path
@@ -57,17 +54,14 @@ FEATURE_COLS = [
 
 
 def assign_season_from_month(month: int) -> str:
-    """
-    Assign Australian season from month number.
-    """
+    """Assign Australian season from month number."""
     if month in [12, 1, 2]:
         return "Summer"
-    elif month in [3, 4, 5]:
+    if month in [3, 4, 5]:
         return "Autumn"
-    elif month in [6, 7, 8]:
+    if month in [6, 7, 8]:
         return "Winter"
-    else:
-        return "Spring"
+    return "Spring"
 
 
 def prepare_forecast_dataset(
@@ -77,8 +71,8 @@ def prepare_forecast_dataset(
     """
     Prepare monthly demand data for forecasting.
 
-    The model predicts monthly trip_count by transport mode.
-    Weather features are merged at month level.
+    The model predicts monthly trip_count by transport mode. Weather features
+    are merged at month level.
     """
     fact = fact_monthly_opal_trips.copy()
     fact["year_month"] = pd.to_datetime(fact["year_month"], errors="coerce")
@@ -109,25 +103,15 @@ def prepare_forecast_dataset(
         ]
     ].drop_duplicates()
 
-    forecast_df = forecast_df.merge(
-        weather_features,
-        on="month_id",
-        how="left"
-    )
-
-    forecast_df = forecast_df.sort_values(
-        ["transport_mode", "year_month"]
-    ).reset_index(drop=True)
+    forecast_df = forecast_df.merge(weather_features, on="month_id", how="left")
+    forecast_df = forecast_df.sort_values(["transport_mode", "year_month"]).reset_index(drop=True)
 
     return forecast_df
 
 
 def create_forecasting_features(forecast_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create calendar, seasonal, lag and rolling average features.
-    """
+    """Create calendar, seasonal, lag and rolling average features."""
     forecast_features = forecast_df.copy()
-
     forecast_features["year_month"] = pd.to_datetime(
         forecast_features["year_month"],
         errors="coerce"
@@ -137,6 +121,7 @@ def create_forecasting_features(forecast_df: pd.DataFrame) -> pd.DataFrame:
     forecast_features["month_num"] = forecast_features["year_month"].dt.month
     forecast_features["season"] = forecast_features["month_num"].apply(assign_season_from_month)
 
+    # Use lagged demand to avoid data leakage from the current month.
     forecast_features["lag_1_demand"] = (
         forecast_features
         .groupby("transport_mode")["trip_count"]
@@ -178,18 +163,13 @@ def train_test_split_by_year(
     """
     Split forecasting data by year.
 
-    The project uses:
-    - Training set: years before 2025
-    - Test set: 2025
-
-    This avoids random splitting, which is not suitable for time-series style
-    demand forecasting.
+    Training uses records before the test year, while testing uses the test
+    year. This avoids random splitting for time-series style forecasting.
     """
     target_col = "trip_count"
 
-    base_cols = ["year_month", "month_id", target_col]
+    base_cols = ["year_month", "month_id", "transport_mode", target_col]
     model_cols = list(dict.fromkeys(base_cols + FEATURE_COLS))
-
     model_data = forecast_features[model_cols].copy()
 
     train_data = model_data[model_data["year"] < test_year].copy()
@@ -204,33 +184,34 @@ def train_test_split_by_year(
     return train_data, test_data, X_train, X_test, y_train, y_test
 
 
-def mean_absolute_percentage_error(y_true, y_pred) -> float:
+def mean_absolute_percentage_error(y_true, y_pred, min_actual: float = 1000) -> float:
     """
-    Standard MAPE.
+    Calculate adjusted MAPE while excluding very small actual demand values.
 
-    This can be unstable when actual values are very small.
-    WMAPE is also provided below and is usually easier to explain for
-    aggregate transport demand.
+    Standard MAPE can become unstable when actual demand is close to zero.
+    This adjusted version only calculates MAPE for observations where actual
+    demand is greater than min_actual.
     """
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
 
-    non_zero_mask = y_true != 0
+    valid_mask = y_true > min_actual
 
-    if non_zero_mask.sum() == 0:
+    if valid_mask.sum() == 0:
         return np.nan
 
     return np.mean(
-        np.abs((y_true[non_zero_mask] - y_pred[non_zero_mask]) / y_true[non_zero_mask])
+        np.abs((y_true[valid_mask] - y_pred[valid_mask]) / y_true[valid_mask])
     ) * 100
 
 
 def weighted_mean_absolute_percentage_error(y_true, y_pred) -> float:
     """
-    WMAPE = total absolute error / total actual demand.
+    Calculate Weighted Mean Absolute Percentage Error.
 
-    This is more stable than MAPE for transport demand data where different
-    modes may have very different demand volumes.
+    WMAPE measures total absolute forecast error as a percentage of total
+    actual demand. It is more stable than standard MAPE for transport demand
+    data where different modes can have very different passenger volumes.
     """
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
@@ -245,11 +226,11 @@ def weighted_mean_absolute_percentage_error(y_true, y_pred) -> float:
 
 def evaluate_model(model_name: str, y_true, y_pred) -> dict:
     """
-    Evaluate a forecasting model using MAE, RMSE, MAPE, WMAPE and R2.
+    Evaluate a forecasting model using absolute and percentage-based metrics.
     """
     mae = mean_absolute_error(y_true, y_pred)
     rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-    mape = mean_absolute_percentage_error(y_true, y_pred)
+    adjusted_mape = mean_absolute_percentage_error(y_true, y_pred, min_actual=1000)
     wmape = weighted_mean_absolute_percentage_error(y_true, y_pred)
     r2 = r2_score(y_true, y_pred)
 
@@ -257,32 +238,24 @@ def evaluate_model(model_name: str, y_true, y_pred) -> dict:
         "model": model_name,
         "MAE": mae,
         "RMSE": rmse,
-        "MAPE": mape,
+        "Adjusted_MAPE": adjusted_mape,
         "WMAPE": wmape,
         "R2": r2
     }
 
 
 def build_preprocessor() -> ColumnTransformer:
-    """
-    Build preprocessing pipeline for categorical and numeric features.
-    """
-    preprocessor = ColumnTransformer(
+    """Build preprocessing pipeline for categorical and numeric features."""
+    return ColumnTransformer(
         transformers=[
             ("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL_FEATURES),
             ("num", "passthrough", NUMERIC_FEATURES)
         ]
     )
 
-    return preprocessor
-
 
 def train_baseline_model(test_data: pd.DataFrame, y_test) -> tuple[np.ndarray, dict]:
-    """
-    Naive baseline model.
-
-    It uses previous month's demand to predict current month's demand.
-    """
+    """Train a naive baseline using previous month demand."""
     baseline_pred = test_data["lag_1_demand"].values
 
     baseline_metrics = evaluate_model(
@@ -295,20 +268,15 @@ def train_baseline_model(test_data: pd.DataFrame, y_test) -> tuple[np.ndarray, d
 
 
 def train_linear_regression(X_train, y_train, X_test, y_test):
-    """
-    Train Linear Regression model.
-    """
-    preprocessor = build_preprocessor()
-
+    """Train a Linear Regression model."""
     linear_model = Pipeline(
         steps=[
-            ("preprocessor", preprocessor),
+            ("preprocessor", build_preprocessor()),
             ("model", LinearRegression())
         ]
     )
 
     linear_model.fit(X_train, y_train)
-
     linear_pred = linear_model.predict(X_test)
 
     linear_metrics = evaluate_model(
@@ -321,14 +289,10 @@ def train_linear_regression(X_train, y_train, X_test, y_test):
 
 
 def train_random_forest(X_train, y_train, X_test, y_test):
-    """
-    Train Random Forest forecasting model.
-    """
-    preprocessor = build_preprocessor()
-
+    """Train a Random Forest forecasting model."""
     rf_model = Pipeline(
         steps=[
-            ("preprocessor", preprocessor),
+            ("preprocessor", build_preprocessor()),
             ("model", RandomForestRegressor(
                 n_estimators=300,
                 max_depth=8,
@@ -338,7 +302,6 @@ def train_random_forest(X_train, y_train, X_test, y_test):
     )
 
     rf_model.fit(X_train, y_train)
-
     rf_pred = rf_model.predict(X_test)
 
     rf_metrics = evaluate_model(
@@ -356,9 +319,7 @@ def create_forecast_results(
     linear_pred,
     rf_pred
 ) -> pd.DataFrame:
-    """
-    Create a model output table for dashboarding and reporting.
-    """
+    """Create a model output table for dashboarding and reporting."""
     forecast_results = test_data[
         [
             "year_month",
@@ -385,7 +346,7 @@ def create_forecast_results(
     forecast_results["rf_abs_error"] = forecast_results["rf_error"].abs()
 
     forecast_results["rf_abs_percentage_error"] = np.where(
-        forecast_results["actual_demand"] != 0,
+        forecast_results["actual_demand"] > 1000,
         forecast_results["rf_abs_error"] / forecast_results["actual_demand"] * 100,
         np.nan
     )
@@ -394,9 +355,7 @@ def create_forecast_results(
 
 
 def get_random_forest_feature_importance(rf_model: Pipeline) -> pd.DataFrame:
-    """
-    Extract feature importance from the fitted Random Forest pipeline.
-    """
+    """Extract feature importance from the fitted Random Forest pipeline."""
     preprocessor_fitted = rf_model.named_steps["preprocessor"]
     rf_fitted = rf_model.named_steps["model"]
 
@@ -413,12 +372,7 @@ def get_random_forest_feature_importance(rf_model: Pipeline) -> pd.DataFrame:
         "importance": rf_fitted.feature_importances_
     })
 
-    feature_importance = feature_importance.sort_values(
-        "importance",
-        ascending=False
-    )
-
-    return feature_importance
+    return feature_importance.sort_values("importance", ascending=False)
 
 
 def run_forecasting_workflow(
@@ -428,13 +382,7 @@ def run_forecasting_workflow(
     test_year: int = 2025
 ) -> dict:
     """
-    Run the full forecasting workflow.
-
-    Returns a dictionary containing:
-    - model_metrics
-    - forecast_results
-    - feature_importance
-    - fitted models
+    Run the full forecasting workflow and optionally export model outputs.
     """
     forecast_df = prepare_forecast_dataset(
         fact_monthly_opal_trips=fact_monthly_opal_trips,

@@ -2,12 +2,8 @@
 Feature engineering and table-building functions for the NSW Transport
 Operations Analytics project.
 
-This module creates:
-1. Date dimension table
-2. GTFS station dimension table
-3. GTFS route dimension table
-4. Final fact and dimension tables
-5. Monthly weather features for modelling and dashboard analysis
+This module creates date, station, route and weather dimensions, as well as
+final fact tables for monthly Opal demand and yearly station flow.
 """
 
 from pathlib import Path
@@ -16,17 +12,14 @@ import numpy as np
 
 
 def assign_season(month: int) -> str:
-    """
-    Assign Australian season based on month.
-    """
+    """Assign Australian season based on month."""
     if month in [12, 1, 2]:
         return "Summer"
-    elif month in [3, 4, 5]:
+    if month in [3, 4, 5]:
         return "Autumn"
-    elif month in [6, 7, 8]:
+    if month in [6, 7, 8]:
         return "Winter"
-    else:
-        return "Spring"
+    return "Spring"
 
 
 def create_date_dimension(
@@ -34,18 +27,8 @@ def create_date_dimension(
     end_date: str = "2025-12-31",
     holidays: pd.DataFrame | None = None
 ) -> pd.DataFrame:
-    """
-    Create a daily date dimension table.
-
-    If a cleaned public holiday table is provided, the date dimension
-    will include is_holiday and holiday_name fields.
-    """
-    date_range = pd.date_range(
-        start=start_date,
-        end=end_date,
-        freq="D"
-    )
-
+    """Create a daily date dimension table with calendar and holiday fields."""
+    date_range = pd.date_range(start=start_date, end=end_date, freq="D")
     dim_date = pd.DataFrame({"date": date_range})
 
     dim_date["year"] = dim_date["date"].dt.year
@@ -67,7 +50,6 @@ def create_date_dimension(
             on="date",
             how="left"
         )
-
         dim_date["is_holiday"] = dim_date["is_holiday"].fillna(False)
         dim_date["holiday_name"] = dim_date["holiday_name"].fillna("Non-Holiday")
     else:
@@ -76,7 +58,7 @@ def create_date_dimension(
 
     dim_date["year_month"] = dim_date["date"].dt.to_period("M").astype(str)
 
-    dim_date = dim_date[
+    return dim_date[
         [
             "date",
             "year",
@@ -94,43 +76,33 @@ def create_date_dimension(
         ]
     ]
 
-    return dim_date
-
 
 def assign_sydney_region(lat: float, lon: float) -> str:
     """
     Assign a simplified Greater Sydney operational region based on coordinates.
 
-    This is not an official administrative boundary. It is used only as a
-    lightweight dashboard grouping feature.
+    This is a lightweight dashboard grouping field rather than an official
+    administrative boundary.
     """
     if pd.isna(lat) or pd.isna(lon):
         return "Unknown"
 
     if (-33.90 <= lat <= -33.84) and (151.18 <= lon <= 151.23):
         return "Sydney CBD"
-
     if lon < 151.05:
         return "Western Sydney"
-    elif lon > 151.23:
+    if lon > 151.23:
         return "Eastern Sydney"
-    elif lat < -33.82:
+    if lat < -33.82:
         return "Northern Sydney"
-    elif lat > -33.96:
+    if lat > -33.96:
         return "Southern Sydney"
-    else:
-        return "Inner Sydney"
+    return "Inner Sydney"
 
 
 def clean_gtfs_stops(stops_raw: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean GTFS stops.txt and create a station dimension table.
-
-    The station_id is created from the stop name so that it can be matched
-    with the station flow table where possible.
-    """
+    """Clean GTFS stops.txt and create a station dimension table."""
     stops = stops_raw.copy()
-
     stops.columns = (
         stops.columns
         .str.strip()
@@ -152,7 +124,6 @@ def clean_gtfs_stops(stops_raw: pd.DataFrame) -> pd.DataFrame:
     stops = stops[available_station_cols].copy()
 
     stops["stop_name"] = stops["stop_name"].astype(str).str.strip()
-
     stops = stops.dropna(subset=["stop_lat", "stop_lon"]).copy()
 
     stops = stops[
@@ -179,7 +150,7 @@ def clean_gtfs_stops(stops_raw: pd.DataFrame) -> pd.DataFrame:
         "station_name_clean": "station_id"
     })
 
-    dim_station = dim_station[
+    return dim_station[
         [
             "station_id",
             "station_id_gtfs",
@@ -190,15 +161,10 @@ def clean_gtfs_stops(stops_raw: pd.DataFrame) -> pd.DataFrame:
         ]
     ].drop_duplicates()
 
-    return dim_station
-
 
 def clean_gtfs_routes(routes_raw: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean GTFS routes.txt and create a route dimension table.
-    """
+    """Clean GTFS routes.txt and create a route dimension table."""
     routes = routes_raw.copy()
-
     routes.columns = (
         routes.columns
         .str.strip()
@@ -223,7 +189,7 @@ def clean_gtfs_routes(routes_raw: pd.DataFrame) -> pd.DataFrame:
 
     routes["transport_mode"] = routes["route_type"].map(route_type_mapping).fillna("Other")
 
-    dim_route = routes[
+    return routes[
         [
             "route_id",
             "agency_id",
@@ -234,13 +200,9 @@ def clean_gtfs_routes(routes_raw: pd.DataFrame) -> pd.DataFrame:
         ]
     ].drop_duplicates()
 
-    return dim_route
-
 
 def create_fact_monthly_opal_trips(opal: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create the final monthly Opal trips fact table.
-    """
+    """Create the final monthly Opal trips fact table."""
     fact_monthly_opal_trips = opal.copy()
 
     fact_monthly_opal_trips["month_id"] = (
@@ -249,7 +211,7 @@ def create_fact_monthly_opal_trips(opal: pd.DataFrame) -> pd.DataFrame:
         + fact_monthly_opal_trips["month"].astype(str).str.zfill(2)
     )
 
-    fact_monthly_opal_trips = fact_monthly_opal_trips[
+    return fact_monthly_opal_trips[
         [
             "month_id",
             "year_month",
@@ -262,13 +224,9 @@ def create_fact_monthly_opal_trips(opal: pd.DataFrame) -> pd.DataFrame:
         ]
     ]
 
-    return fact_monthly_opal_trips
-
 
 def create_fact_station_flow(station_flow: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create the final station flow fact table.
-    """
+    """Create the final station flow fact table."""
     fact_station_flow = station_flow.copy()
 
     fact_station_flow["station_flow_id"] = (
@@ -277,7 +235,7 @@ def create_fact_station_flow(station_flow: pd.DataFrame) -> pd.DataFrame:
         + fact_station_flow["station_id"]
     )
 
-    fact_station_flow = fact_station_flow[
+    return fact_station_flow[
         [
             "station_flow_id",
             "year",
@@ -304,16 +262,10 @@ def create_fact_station_flow(station_flow: pd.DataFrame) -> pd.DataFrame:
         ]
     ]
 
-    return fact_station_flow
-
 
 def create_dim_weather(weather: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create the weather dimension table used for dashboarding and modelling.
-    """
-    dim_weather = weather.copy()
-
-    dim_weather = dim_weather[
+    """Create the weather dimension table used for dashboarding and modelling."""
+    return weather[
         [
             "date",
             "rainfall_mm",
@@ -322,22 +274,13 @@ def create_dim_weather(weather: pd.DataFrame) -> pd.DataFrame:
             "is_rainy",
             "weather_category"
         ]
-    ]
-
-    return dim_weather
+    ].copy()
 
 
 def create_monthly_weather_features(dim_weather: pd.DataFrame) -> pd.DataFrame:
-    """
-    Aggregate daily weather data into monthly weather features.
-
-    These features are used for:
-    - SQL / dashboard weather-demand analysis
-    - forecasting model input
-    """
+    """Aggregate daily weather data into monthly features."""
     weather = dim_weather.copy()
     weather["date"] = pd.to_datetime(weather["date"], errors="coerce")
-
     weather["year"] = weather["date"].dt.year
     weather["month"] = weather["date"].dt.month
     weather["month_id"] = (
@@ -346,7 +289,7 @@ def create_monthly_weather_features(dim_weather: pd.DataFrame) -> pd.DataFrame:
         + weather["month"].astype(str).str.zfill(2)
     )
 
-    monthly_weather = (
+    return (
         weather
         .groupby(["year", "month", "month_id"], as_index=False)
         .agg(
@@ -358,33 +301,26 @@ def create_monthly_weather_features(dim_weather: pd.DataFrame) -> pd.DataFrame:
         )
     )
 
-    return monthly_weather
-
 
 def create_monthly_demand_weather(
     monthly_demand: pd.DataFrame,
     dim_weather: pd.DataFrame
 ) -> pd.DataFrame:
-    """
-    Merge monthly demand trend with monthly weather features.
-    """
+    """Merge monthly demand trend with monthly weather features."""
     monthly_weather = create_monthly_weather_features(dim_weather)
 
     monthly_demand_weather = monthly_demand.copy()
-
     monthly_demand_weather["month_id"] = (
         monthly_demand_weather["year"].astype(str)
         + "-"
         + monthly_demand_weather["month"].astype(str).str.zfill(2)
     )
 
-    monthly_demand_weather = monthly_demand_weather.merge(
+    return monthly_demand_weather.merge(
         monthly_weather,
         on=["year", "month", "month_id"],
         how="left"
     )
-
-    return monthly_demand_weather
 
 
 def export_final_tables(
@@ -396,9 +332,7 @@ def export_final_tables(
     dim_weather: pd.DataFrame,
     output_dir: str | Path
 ) -> None:
-    """
-    Export final fact and dimension tables to data/final.
-    """
+    """Export final fact and dimension tables to data/final."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
