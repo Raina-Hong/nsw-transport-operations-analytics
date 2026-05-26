@@ -248,10 +248,3 @@ Weather observations are based on Sydney Airport data and are used as a proxy fo
 More detailed methodology, assumptions and limitations are discussed in the [Project Report](reports/project_report.md).
 
 ---
-
-## Resume Bullet Points
-
-- Built an end-to-end NSW transport operations analytics workflow using Opal trips, station entries/exits, GTFS, weather and calendar data to monitor demand trends, station pressure and forecasting opportunities.
-- Cleaned and transformed raw datasets into fact and dimension tables using Python and DuckDB, enabling repeatable SQL analysis of demand trends, seasonality, YTD YoY growth, station flow and data quality.
-- Developed a monthly demand forecasting workflow using lagged demand, rolling averages, weather and calendar features, and evaluated baseline, linear regression and random forest models using MAE, RMSE, WMAPE and R2.
-- Created two Tableau dashboards to communicate operations overview, demand seasonality, YTD growth, weather-demand relationships, model performance and data quality indicators.
