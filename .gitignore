@@ -1,0 +1,22 @@
+# Large raw data
+data/raw/
+*.zip
+
+# Mac system files
+.DS_Store
+
+# Python temporary files
+__pycache__/
+.ipynb_checkpoints/
+
+# Jupyter checkpoints
+*/.ipynb_checkpoints/*
+
+# Tableau local/extract files
+*.hyper
+
+# Database temporary files
+*.duckdb.wal
+
+# Logs
+*.log

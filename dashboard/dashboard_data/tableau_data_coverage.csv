@@ -1,0 +1,5 @@
+dataset,coverage_type,start_period,end_period,notes
+Opal monthly trips,Monthly demand,2020-01-01 00:00:00,2025-08-01 00:00:00,Used for monthly demand trend and forecasting.
+Train station entries/exits,Yearly station flow,2022,2023,"Used for station flow, peak pressure and bottleneck analysis."
+Weather observations,Daily weather,2020-01-01 00:00:00,2025-12-31 00:00:00,Sydney Airport weather used as a proxy for Greater Sydney conditions.
+Date dimension,Daily calendar,2020-01-01 00:00:00,2025-12-31 00:00:00,"Used for calendar, weekend, season and holiday features."

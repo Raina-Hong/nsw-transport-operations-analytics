@@ -1,0 +1,10 @@
+dataset,row_count,column_count,missing_cells,missing_rate,duplicate_rows
+fact_monthly_opal_trips,4261,8,0,0.0,0
+fact_station_flow,521,22,0,0.0,0
+dim_date,2192,13,0,0.0,0
+dim_station,170490,6,0,0.0,0
+dim_route,10201,6,0,0.0,0
+dim_weather,2192,9,21,0.0010644768856447689,0
+forecast_results,41,10,0,0.0,0
+model_metrics,3,5,0,0.0,0
+feature_importance,27,2,0,0.0,0

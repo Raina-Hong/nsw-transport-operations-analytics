@@ -1,0 +1,7 @@
+dataset,row_count,duplicate_count
+fact_monthly_opal_trips,4261,0
+fact_station_flow,521,0
+dim_date,2192,0
+dim_station,170490,0
+dim_route,10201,0
+dim_weather,2192,0
