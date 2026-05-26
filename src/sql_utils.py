@@ -338,46 +338,83 @@ SQL_QUERIES = {
             SUM(CASE WHEN rainfall_mm IS NULL OR max_temp IS NULL OR min_temp IS NULL THEN 1 ELSE 0 END) AS missing_key_metric_count
         FROM dim_weather;
     """,
-
-    "yoy_mode_demand": """
-        WITH yearly_demand AS (
+        "yoy_mode_demand": """
+        WITH monthly_mode_demand AS (
             SELECT
                 year,
-                transport_mode,
-                SUM(trip_count) AS total_trips
+                month,
+                CASE
+                    WHEN LOWER(transport_mode) = 'bus' THEN 'Bus'
+                    WHEN LOWER(transport_mode) = 'train' THEN 'Train'
+                    WHEN LOWER(transport_mode) = 'ferry' THEN 'Ferry'
+                    WHEN LOWER(transport_mode) = 'metro' THEN 'Metro'
+                    WHEN LOWER(transport_mode) = 'light rail' THEN 'Light Rail'
+                    ELSE 'Other'
+                END AS transport_mode_clean,
+                SUM(trip_count) AS monthly_trips
             FROM fact_monthly_opal_trips
-            GROUP BY year, transport_mode
+            GROUP BY
+                year,
+                month,
+                CASE
+                    WHEN LOWER(transport_mode) = 'bus' THEN 'Bus'
+                    WHEN LOWER(transport_mode) = 'train' THEN 'Train'
+                    WHEN LOWER(transport_mode) = 'ferry' THEN 'Ferry'
+                    WHEN LOWER(transport_mode) = 'metro' THEN 'Metro'
+                    WHEN LOWER(transport_mode) = 'light rail' THEN 'Light Rail'
+                    ELSE 'Other'
+                END
+        ),
+
+        latest_data_cutoff AS (
+            SELECT
+                MAX(year) AS latest_year,
+                MAX(month) AS latest_available_month
+            FROM monthly_mode_demand
+            WHERE year = (
+                SELECT MAX(year)
+                FROM monthly_mode_demand
+            )
+        ),
+
+        comparable_ytd_demand AS (
+            SELECT
+                m.year,
+                m.transport_mode_clean,
+                SUM(m.monthly_trips) AS total_trips
+            FROM monthly_mode_demand m
+            CROSS JOIN latest_data_cutoff c
+            WHERE m.month <= c.latest_available_month
+            GROUP BY
+                m.year,
+                m.transport_mode_clean
+        ),
+
+        ytd_growth AS (
+            SELECT
+                year,
+                transport_mode_clean,
+                total_trips,
+                LAG(total_trips) OVER (
+                    PARTITION BY transport_mode_clean
+                    ORDER BY year
+                ) AS previous_year_trips
+            FROM comparable_ytd_demand
         )
 
         SELECT
             year,
-            transport_mode,
+            transport_mode_clean AS transport_mode,
             total_trips,
-            LAG(total_trips) OVER (
-                PARTITION BY transport_mode
-                ORDER BY year
-            ) AS previous_year_trips,
-            total_trips - LAG(total_trips) OVER (
-                PARTITION BY transport_mode
-                ORDER BY year
-            ) AS yoy_change,
+            previous_year_trips,
+            total_trips - previous_year_trips AS yoy_change,
             CASE
-                WHEN LAG(total_trips) OVER (
-                    PARTITION BY transport_mode
-                    ORDER BY year
-                ) = 0 THEN NULL
-                ELSE (
-                    total_trips - LAG(total_trips) OVER (
-                        PARTITION BY transport_mode
-                        ORDER BY year
-                    )
-                ) * 100.0 / LAG(total_trips) OVER (
-                    PARTITION BY transport_mode
-                    ORDER BY year
-                )
+                WHEN previous_year_trips IS NULL OR previous_year_trips = 0 THEN NULL
+                ELSE (total_trips - previous_year_trips) * 100.0 / previous_year_trips
             END AS yoy_growth_pct
-        FROM yearly_demand
-        ORDER BY transport_mode, year;
+        FROM ytd_growth
+        WHERE transport_mode_clean <> 'Other'
+        ORDER BY year, transport_mode_clean;
     """,
 
     "monthly_seasonality": """
