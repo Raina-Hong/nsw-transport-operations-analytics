@@ -305,26 +305,13 @@ One modelling limitation is that MAPE can become unstable when actual demand val
 
 ---
 
-## 9. Tableau Dashboard Screenshot
+## 9. Tableau Dashboard
 
-The Tableau dashboard is saved under:
+The final Tableau dashboard was designed for transport operations and business stakeholders. It brings together demand trends, station flow pressure, forecast performance and data quality indicators into one interactive view.
 
-```text
-dashboard/tableau/nsw_transport_dashboard.twbx
-```
-
-Dashboard screenshot:
+[View Interactive Tableau Dashboard](https://public.tableau.com/views/nsw_transport/1_1?:language=zh-CN&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link)
 
 ![NSW Transport Dashboard](dashboard/tableau/nsw_transport_dashboard.png)
-
-The dashboard is designed to support stakeholder-facing transport operations reporting. It uses the exported CSV files under `dashboard/dashboard_data/`.
-
-Main dashboard sections include:
-
-1. Demand overview
-2. Station flow and network insights
-3. Forecasting and operational planning
-4. Data quality and coverage
 
 ---
 
@@ -387,90 +374,3 @@ This project is designed as a portfolio analytics project and has several limita
 
 ---
 
-## 12. How to Reproduce
-
-### Step 1: Clone the repository
-
-```bash
-git clone https://github.com/Raina-Hong/nsw-transport-operations-analytics.git
-cd nsw-transport-operations-analytics
-```
-
-### Step 2: Create a Python environment
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-For Windows:
-
-```bash
-.venv\Scripts\activate
-```
-
-### Step 3: Install required packages
-
-```bash
-pip install pandas numpy matplotlib scikit-learn duckdb jupyter
-```
-
-If a `requirements.txt` file is added later, use:
-
-```bash
-pip install -r requirements.txt
-```
-
-### Step 4: Check raw data location
-
-Place the raw files under `data/raw/`:
-
-```text
-data/raw/
-├── NSW-2-Opal-trips-all-modes.csv
-├── NSW-train-station-entries-and-exits.csv
-├── nsw_public_holidays_2019_2023.csv
-├── sydney_airport_daily_rainfall.csv
-├── sydney_airport_daily_max_temp.csv
-├── sydney_airport_daily_min_temp.csv
-└── full_greater_sydney_gtfs_static_0/
-    ├── stops.txt
-    └── routes.txt
-```
-
-### Step 5: Run the notebook
-
-```bash
-jupyter notebook notebooks/NSW_Transport_Operations_Analytics.ipynb
-```
-
-Run the notebook from top to bottom. It will generate:
-
-- cleaned datasets under `data/processed/`
-- final fact and dimension tables under `data/final/`
-- SQL outputs under `outputs/sql_exports/`
-- model results under `outputs/model_results/`
-- charts under `outputs/charts/`
-- Tableau-ready CSV files under `dashboard/dashboard_data/`
-
-### Step 6: Open the Tableau dashboard
-
-Open:
-
-```text
-dashboard/tableau/nsw_transport_dashboard.twbx
-```
-
-The dashboard uses the exported CSV files from `dashboard/dashboard_data/`.
-
----
-
-## 13. Resume Bullet Points
-
-**NSW Transport Operations Analytics Project | Python, SQL, DuckDB, Tableau**
-
-- Built an end-to-end transport operations analytics workflow using NSW Opal trips, station entries/exits, GTFS, weather and calendar data to monitor demand trends, station pressure and data quality risks.
-- Cleaned and transformed raw transport datasets into fact and dimension tables using Python and DuckDB, enabling repeatable SQL analysis of monthly demand, station flow, peak pressure and entry-exit imbalance.
-- Developed SQL-based operational analysis covering transport mode demand, passenger card type composition, top station flow, yearly demand trends and data quality checks.
-- Built demand forecasting models using lagged demand, rolling averages, weather and calendar features, and benchmarked model performance against a naive previous-month baseline.
-- Created a Tableau dashboard to visualise demand trends, station bottlenecks, forecast results and data quality indicators for stakeholder-facing operational reporting.
