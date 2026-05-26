@@ -317,10 +317,16 @@ The feature importance analysis shows that lag-1 demand is the most important pr
 This result is reasonable for transport demand forecasting. In a real operations setting, simple baseline models should be included before relying on more complex models.
 
 ---
-
 ## 7. Tableau Dashboard Design
 
-Two Tableau dashboards were created to communicate the project outputs.
+Two Tableau dashboards were created to communicate the project outputs.  
+The interactive Tableau workbook is available here:
+
+[View Interactive Tableau Workbook](https://public.tableau.com/views/nsw_transport/NSWTransportOperationsOverview?:language=zh-CN&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link)
+
+The workbook contains two dashboards: an operations overview dashboard and a deeper demand-patterns and forecasting dashboard.
+
+---
 
 ### Dashboard 1: NSW Transport Operations Analytics Dashboard
 
@@ -333,6 +339,8 @@ The first dashboard provides an operational overview. It includes:
 - data coverage summary.
 
 This dashboard is designed for stakeholders who need a quick view of demand and station flow patterns.
+
+[Open the interactive Operations Overview dashboard](https://public.tableau.com/views/nsw_transport/NSWTransportOperationsOverview?:language=zh-CN&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link)
 
 ![NSW Transport Operations Overview](../dashboard/tableau/NSW%20Transport%20Operations%20Overview.png)
 
@@ -349,10 +357,12 @@ The second dashboard provides deeper analysis. It includes:
 - random forest feature importance;
 - model performance summary.
 
-This dashboard is designed to show the analytical depth behind the project, including SQL-based patterns and forecasting results.
+This dashboard is designed to show the analytical depth behind the project, including SQL-based patterns and forecasting results. The second dashboard can be accessed from the Tableau workbook tabs.
+
+[Open the interactive Tableau workbook](https://public.tableau.com/views/nsw_transport/NSWTransportOperationsOverview?:language=zh-CN&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link)
 
 ![Demand Patterns and Forecasting Insights](../dashboard/tableau/Demand%20Patterns%20and%20Forecasting%20Insights.png)
-
+ 
 ---
 
 ## 8. Key Findings and Recommendations
